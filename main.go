@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 )
@@ -26,14 +28,15 @@ type Context struct {
 	RemainingTimes int32
 }
 
+// search Pexels for any topic
 func (c *Context) SearchPhotos(query string, perPage, page int) (*SearchResult, error) {
 	url := fmt.Sprintf(PhotoApi+"/search?query=%s&per_page=%d&page=%d", query, perPage, page)
 	resp, err := c.requestDoWithAuth("GET", url)
-	defer resp.Body.Close()
 
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 
@@ -49,6 +52,70 @@ func (c *Context) SearchPhotos(query string, perPage, page int) (*SearchResult, 
 	}
 
 	return &res, nil
+}
+
+//  Receive real-time photos curated by the Pexels team
+func (c *Context) CuratedPhotos(perPage, page int) (*CuratedResult, error) {
+	url := fmt.Sprintf(PhotoApi+"/curated?per_page=%d&page=%d", perPage, page)
+	resp, err := c.requestDoWithAuth("GET", url)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var res CuratedResult
+	err = json.Unmarshal(data, &res)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+// Retrieve a specific Photo from its id.
+func (c *Context) GetPhoto(id int32) (*Photo, error) {
+	url := fmt.Sprintf(PhotoApi+"/photos/%d", id)
+	resp, err := c.requestDoWithAuth("GET", url)
+
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var res Photo
+	err = json.Unmarshal(data, &res)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
+}
+
+// Get random photo
+func (c *Context) GetRandomPhoto() (*Photo, error) {
+	rand.Seed(time.Now().Unix())
+	randNum := rand.Intn(1001)
+	res, err := c.CuratedPhotos(1, randNum)
+	if err == nil && len(res.Photos) == 1 {
+		return &res.Photos[0], nil
+	}
+
+	return nil, err
 }
 
 func (c *Context) requestDoWithAuth(method, url string) (*http.Response, error) {
@@ -72,7 +139,6 @@ func (c *Context) requestDoWithAuth(method, url string) (*http.Response, error) 
 	c.RemainingTimes = int32(times)
 
 	return res, nil
-
 }
 
 func NewContext(token string) *Context {
@@ -101,6 +167,6 @@ func main() {
 		fmt.Errorf("Search result wrong")
 	}
 
-	fmt.Printf(result)
+	fmt.Println(result)
 
 }
